@@ -1,0 +1,468 @@
+/* Estilos principais do CanvasBoard */
+
+.canvas-board-container {
+  position: relative;
+  display: inline-block;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.canvas-board {
+  display: block;
+  cursor: crosshair;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  transition: border-color 0.2s ease;
+}
+
+.canvas-board:hover {
+  border-color: #3b82f6;
+}
+
+.canvas-board:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Estados do canvas */
+.canvas-board.drawing {
+  cursor: crosshair;
+}
+
+.canvas-board.erasing {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="none" stroke="red" stroke-width="2"/></svg>')
+    10 10, auto;
+}
+
+.canvas-board.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Controles do canvas */
+.canvas-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+}
+
+.canvas-tool-button {
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.canvas-tool-button:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.canvas-tool-button.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.canvas-tool-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Brush size indicator */
+.brush-size-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+/* Color picker */
+.color-picker-button {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.color-picker-button:hover {
+  border-color: #9ca3af;
+}
+
+/* Zoom controls */
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.zoom-level {
+  font-size: 12px;
+  color: #6b7280;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* Loading state */
+.canvas-board.loading {
+  position: relative;
+}
+
+.canvas-board.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .canvas-board-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .canvas-board {
+    width: 100%;
+    height: auto;
+  }
+
+  .canvas-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .canvas-tool-button {
+    padding: 6px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .canvas-board-container {
+    background: #1f2937;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .canvas-board {
+    background: #ffffff;
+    border-color: #374151;
+  }
+
+  .canvas-controls {
+    background: #111827;
+    border-color: #374151;
+  }
+
+  .canvas-tool-button {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+
+  .canvas-tool-button:hover {
+    background: #374151;
+    border-color: #6b7280;
+  }
+}
+
+/* Animações suaves */
+.canvas-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Utilitários */
+.canvas-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-fullscreen .canvas-board-container {
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+/* Fullscreen Canvas Styles */
+.canvas-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-fullscreen .canvas-board {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.canvas-fullscreen .canvas-board:hover {
+  border-color: #3b82f6;
+}
+
+/* Floating Panels */
+.floating-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.floating-panel:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Toolbar Animations */
+.toolbar-slide-down {
+  animation: slideDown 0.3s ease-out;
+}
+
+.toolbar-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+/* Tool Button Styles */
+.tool-button {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.tool-button:hover {
+  transform: translateY(-1px);
+}
+
+.tool-button.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  background: #3b82f6;
+  border-radius: 50%;
+}
+
+/* Color Picker Styles */
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.color-swatch.active {
+  border-color: #3b82f6;
+  transform: scale(1.15);
+}
+
+.color-swatch.active::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Grid Overlay */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  opacity: 0.1;
+  background-image: linear-gradient(to right, #000 1px, transparent 1px),
+    linear-gradient(to bottom, #000 1px, transparent 1px);
+  transition: opacity 0.3s ease;
+}
+
+.grid-overlay.visible {
+  opacity: 0.2;
+}
+
+/* Zoom Controls */
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.zoom-level {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* Responsive Fullscreen */
+@media (max-width: 768px) {
+  .canvas-fullscreen .floating-panel {
+    width: calc(100vw - 32px);
+    max-width: 320px;
+  }
+
+  .canvas-fullscreen .canvas-board {
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 120px);
+  }
+
+  .tool-button {
+    min-width: 36px;
+    height: 36px;
+  }
+}
+
+/* Dark Mode Support for Fullscreen */
+@media (prefers-color-scheme: dark) {
+  .canvas-fullscreen {
+    background: #0f0f0f;
+  }
+
+  .floating-panel {
+    background: rgba(31, 41, 55, 0.95);
+    border-color: rgba(75, 85, 99, 0.3);
+  }
+
+  .canvas-fullscreen .canvas-board {
+    border-color: #374151;
+  }
+}
+
+/* Smooth Transitions */
+.canvas-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panel-enter {
+  animation: panelSlideIn 0.3s ease-out;
+}
+
+.panel-exit {
+  animation: panelSlideOut 0.3s ease-in;
+}
+
+@keyframes panelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panelSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+}
