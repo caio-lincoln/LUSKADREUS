@@ -3,35 +3,31 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Chrome, MessageCircle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Eye, EyeOff, LogIn } from "lucide-react"
 import { authService } from "./auth-service"
 
 export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
 
-  const handleGoogleLogin = async () => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsLoading(true)
+    setError("")
+    
     try {
-      await authService.loginWithGoogle()
-      console.log("Login com Google realizado")
+      await authService.loginWithEmail(email, password)
+      console.log("Login realizado com sucesso")
       // Redirecionar para dashboard
       window.location.href = "/dashboard"
     } catch (error) {
-      console.error("Erro no login com Google:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleDiscordLogin = async () => {
-    setIsLoading(true)
-    try {
-      await authService.loginWithDiscord()
-      console.log("Login com Discord realizado")
-      // Redirecionar para dashboard
-      window.location.href = "/dashboard"
-    } catch (error) {
-      console.error("Erro no login com Discord:", error)
+      console.error("Erro no login:", error)
+      setError("Email ou senha incorretos")
     } finally {
       setIsLoading(false)
     }
@@ -47,15 +43,68 @@ export function LoginPage() {
           <CardTitle className="text-2xl font-bold">Luska Dreus</CardTitle>
           <CardDescription>Entre na plataforma para começar a praticar desenho</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Button onClick={handleGoogleLogin} disabled={isLoading} className="w-full" variant="outline">
-            <Chrome className="mr-2 h-4 w-4" />
-            Entrar com Google
-          </Button>
-          <Button onClick={handleDiscordLogin} disabled={isLoading} className="w-full" variant="outline">
-            <MessageCircle className="mr-2 h-4 w-4" />
-            Entrar com Discord
-          </Button>
+        <CardContent>
+          <form onSubmit={handleEmailLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Digite sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="text-sm text-red-600 text-center">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" disabled={isLoading} className="w-full">
+              {isLoading ? (
+                "Entrando..."
+              ) : (
+                <>
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Entrar
+                </>
+              )}
+            </Button>
+          </form>
 
           {/* Link direto para admin */}
           <div className="pt-4 border-t text-center">
