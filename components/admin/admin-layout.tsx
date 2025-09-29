@@ -6,75 +6,112 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Shield, LogOut, Copy, RefreshCw } from "lucide-react"
+import { Shield, LogOut, Mail, Lock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { supabase } from "@/lib/supabase-client"
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [token, setToken] = useState("")
-  const [currentToken, setCurrentToken] = useState("")
-  const [tokenExpiry, setTokenExpiry] = useState<Date | null>(null)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [user, setUser] = useState<any>(null)
 
-  // Gerar token temporário (válido por 1 hora)
-  const generateToken = () => {
-    const newToken = `admin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const expiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hora
-
-    setCurrentToken(newToken)
-    setTokenExpiry(expiry)
-    localStorage.setItem("admin_token", newToken)
-    localStorage.setItem("admin_token_expiry", expiry.toISOString())
-
-    console.log("🔑 Token gerado:", newToken)
-    console.log("⏰ Válido até:", expiry.toLocaleString())
-
-    return newToken
-  }
-
-  // Verificar token existente
+  // Verificar autenticação existente
   useEffect(() => {
-    const savedToken = localStorage.getItem("admin_token")
-    const savedExpiry = localStorage.getItem("admin_token_expiry")
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        // Verificar se é admin
+        const { data: userData } = await supabase
+          .from('users')
+          .select('is_admin, email')
+          .eq('id', session.user.id)
+          .single()
 
-    if (savedToken && savedExpiry) {
-      const expiryDate = new Date(savedExpiry)
-      if (expiryDate > new Date()) {
-        setCurrentToken(savedToken)
-        setTokenExpiry(expiryDate)
-        setIsAuthenticated(true)
-        console.log("🔑 Token válido encontrado")
-      } else {
-        // Token expirado
-        localStorage.removeItem("admin_token")
-        localStorage.removeItem("admin_token_expiry")
-        console.log("⏰ Token expirado")
+        if (userData?.is_admin) {
+          setIsAuthenticated(true)
+          setUser(userData)
+          console.log("Admin autenticado:", userData.email)
+        }
       }
     }
+
+    checkAuth()
+
+    // Escutar mudanças na autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false)
+        setUser(null)
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('is_admin, email')
+          .eq('id', session.user.id)
+          .single()
+
+        if (userData?.is_admin) {
+          setIsAuthenticated(true)
+          setUser(userData)
+        }
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const handleLogin = () => {
-    if (token === currentToken && tokenExpiry && tokenExpiry > new Date()) {
-      setIsAuthenticated(true)
-      console.log("✅ Login admin realizado")
-    } else {
-      alert("Token inválido ou expirado!")
+  const handleLogin = async () => {
+    if (!email || !password) {
+      alert("Por favor, preencha email e senha!")
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) {
+        alert(`Erro no login: ${error.message}`)
+        return
+      }
+
+      if (data.user) {
+        // Verificar se é admin
+        const { data: userData } = await supabase
+          .from('users')
+          .select('is_admin, email')
+          .eq('id', data.user.id)
+          .single()
+
+        if (userData?.is_admin) {
+          setIsAuthenticated(true)
+          setUser(userData)
+          console.log("Admin autenticado:", userData.email)
+        } else {
+          await supabase.auth.signOut()
+          alert("Acesso negado - apenas administradores!")
+        }
+      }
+    } catch (error) {
+      console.error('Erro no login:', error)
+      alert("Erro no login!")
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     setIsAuthenticated(false)
-    setToken("")
-    localStorage.removeItem("admin_token")
-    localStorage.removeItem("admin_token_expiry")
-    console.log("🚪 Logout admin realizado")
+    setUser(null)
+    setEmail("")
+    setPassword("")
+    console.log("Logout admin realizado")
   }
-
-  const copyToken = () => {
-    navigator.clipboard.writeText(currentToken)
-    alert("Token copiado para a área de transferência!")
-  }
-
-  const isTokenExpired = tokenExpiry && tokenExpiry <= new Date()
 
   if (!isAuthenticated) {
     return (
@@ -85,51 +122,41 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             <CardTitle>Acesso Administrativo</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Gerador de Token */}
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h3 className="font-semibold text-blue-800 mb-2">Token Temporário</h3>
-              {currentToken && !isTokenExpired ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="default" className="bg-green-600">
-                      Ativo
-                    </Badge>
-                    <span className="text-xs text-green-700">Válido até: {tokenExpiry?.toLocaleTimeString()}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input value={currentToken} readOnly className="text-xs font-mono" />
-                    <Button onClick={copyToken} size="sm" variant="outline">
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {/* Login com Email/Senha */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="email"
+                    placeholder="Email do administrador"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {isTokenExpired && (
-                    <Badge variant="destructive" className="mb-2">
-                      Token Expirado
-                    </Badge>
-                  )}
-                  <Button onClick={generateToken} className="w-full" size="sm">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Gerar Novo Token
-                  </Button>
-                  <p className="text-xs text-blue-700">Gere um token temporário válido por 1 hora</p>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="password"
+                    placeholder="Senha"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10"
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                  />
                 </div>
-              )}
-            </div>
-
-            {/* Login */}
-            <div className="space-y-2">
-              <Input
-                type="password"
-                placeholder="Cole o token aqui"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className="font-mono text-xs"
-              />
-              <Button onClick={handleLogin} className="w-full" disabled={!token}>
-                Entrar
+              </div>
+              
+              <Button 
+                onClick={handleLogin} 
+                className="w-full" 
+                disabled={!email || !password || isLoading}
+              >
+                {isLoading ? "Entrando..." : "Entrar"}
               </Button>
             </div>
 
@@ -138,17 +165,14 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               <p>
                 <strong>Instruções:</strong>
               </p>
-              <p>1. Clique em "Gerar Novo Token"</p>
-              <p>2. Copie o token gerado</p>
-              <p>3. Cole no campo acima e clique "Entrar"</p>
-              <p className="text-orange-600">⚠️ Token válido por apenas 1 hora</p>
+              <p>• Use suas credenciais de administrador</p>
+              <p>• Apenas usuários com permissão de admin podem acessar</p>
             </div>
           </CardContent>
         </Card>
       </div>
     )
   }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b">
@@ -157,9 +181,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2">
               <Shield className="h-6 w-6 text-red-600" />
               <h1 className="text-xl font-bold">Painel Administrativo</h1>
-              {tokenExpiry && (
+              {user && (
                 <Badge variant="outline" className="text-xs">
-                  Expira: {tokenExpiry.toLocaleTimeString()}
+                  {user.email}
                 </Badge>
               )}
             </div>

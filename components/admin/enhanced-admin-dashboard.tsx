@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
+import { supabase } from "@/lib/supabase-client"
 import {
   Upload,
   ImageIcon,
@@ -43,7 +44,7 @@ interface User {
   id: string
   name: string
   email: string
-  provider: "google" | "discord"
+  provider: "google" | "email"
   joinDate: Date
   lastActive: Date
   drawingsCount: number
@@ -85,111 +86,328 @@ interface SystemStats {
   systemUptime: string
 }
 
-export function EnhancedAdminDashboard() {
+export default function EnhancedAdminDashboard() {
   const [selectedCategory, setSelectedCategory] = useState("")
+  const [selectedFilter, setSelectedFilter] = useState("")
+  const [selectedImageFilter, setSelectedImageFilter] = useState("all")
   const [imageDescription, setImageDescription] = useState("")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [selectedDrawing, setSelectedDrawing] = useState<Drawing | null>(null)
   const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null)
-  const [imageFilter, setImageFilter] = useState("")
+  const [imageFilter, setImageFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [processProgress, setProcessProgress] = useState(0)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  
+  // Estados para upload em lotes
+  const [batchFiles, setBatchFiles] = useState<File[]>([])
+  const [isBatchUploading, setIsBatchUploading] = useState(false)
+  const [batchProgress, setBatchProgress] = useState(0)
+  const [batchResults, setBatchResults] = useState<any[]>([])
 
-  // Mock data
-  const [systemStats] = useState<SystemStats>({
-    totalUsers: 1247,
-    activeUsers: 89,
-    totalDrawings: 3456,
-    publicDrawings: 2134,
-    totalLikes: 12890,
-    totalComments: 4567,
-    reportedContent: 12,
-    systemUptime: "99.9%",
+  // Dados reais do sistema - removendo dados mockados
+  const [systemStats, setSystemStats] = useState<SystemStats>({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalDrawings: 0,
+    publicDrawings: 0,
+    totalLikes: 0,
+    totalComments: 0,
+    reportedContent: 0,
+    systemUptime: "0%",
   })
 
-  const [galleryImages] = useState<GalleryImage[]>([
-    {
-      id: "1",
-      filename: "paisagem_montanha_001.jpg",
-      category: "sketch-by-image",
-      description: "Paisagem montanhosa com lago ao pôr do sol",
-      uploadDate: new Date("2024-01-20"),
-      size: "2.4 MB",
-      dimensions: "1920x1080",
-      isActive: true,
-    },
-    {
-      id: "2",
-      filename: "retrato_pessoa_002.jpg",
-      category: "blind-study",
-      description: "Retrato de pessoa jovem sorrindo",
-      uploadDate: new Date("2024-01-19"),
-      size: "1.8 MB",
-      dimensions: "1080x1080",
-      isActive: true,
-    },
-    {
-      id: "3",
-      filename: "natureza_flores_003.jpg",
-      category: "sketch-by-description",
-      description: "Campo de flores coloridas na primavera",
-      uploadDate: new Date("2024-01-18"),
-      size: "3.1 MB",
-      dimensions: "1920x1280",
-      isActive: false,
-    },
-  ])
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [drawings, setDrawings] = useState<Drawing[]>([])
 
-  const [users] = useState<User[]>([
-    {
-      id: "1",
-      name: "João Silva",
-      email: "joao@gmail.com",
-      provider: "google",
-      joinDate: new Date("2024-01-15"),
-      lastActive: new Date("2024-01-20"),
-      drawingsCount: 24,
-      isActive: true,
-      isBanned: false,
-    },
-    {
-      id: "2",
-      name: "Maria Santos",
-      email: "maria@discord.com",
-      provider: "discord",
-      joinDate: new Date("2024-01-10"),
-      lastActive: new Date("2024-01-19"),
-      drawingsCount: 18,
-      isActive: true,
-      isBanned: false,
-    },
-  ])
+  // Carregar dados reais do Supabase
+  useEffect(() => {
+    loadSystemData()
+  }, [])
 
-  const [drawings] = useState<Drawing[]>([
-    {
-      id: "1",
-      title: "Paisagem Montanhosa",
-      author: "João Silva",
-      mode: "sketch-by-image",
-      createdAt: new Date("2024-01-20"),
-      isPublic: true,
-      likes: 45,
-      comments: 8,
-      isReported: false,
-    },
-    {
-      id: "2",
-      title: "Retrato Abstrato",
-      author: "Maria Santos",
-      mode: "sketch-by-description",
-      createdAt: new Date("2024-01-19"),
-      isPublic: true,
-      likes: 32,
-      comments: 5,
-      isReported: true,
-    },
-  ])
+  const loadSystemData = async () => {
+    try {
+      setIsProcessing(true)
+      setProcessProgress(0)
+
+      // Carregar estatísticas do sistema
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, created_at, last_active_at')
+
+      if (usersError) throw usersError
+
+      const { data: drawingsData, error: drawingsError } = await supabase
+        .from('drawings')
+        .select('id, is_public, likes_count, comments_count, created_at')
+
+      if (drawingsError) throw drawingsError
+
+      // Calcular estatísticas
+      const totalUsers = usersData?.length || 0
+      const activeUsers = usersData?.filter(user => {
+        const lastActive = new Date(user.last_active_at || user.created_at)
+        const daysSinceActive = (Date.now() - lastActive.getTime()) / (1000 * 60 * 60 * 24)
+        return daysSinceActive <= 30
+      }).length || 0
+
+      const totalDrawings = drawingsData?.length || 0
+      const publicDrawings = drawingsData?.filter(d => d.is_public).length || 0
+      const totalLikes = drawingsData?.reduce((sum, d) => sum + (d.likes_count || 0), 0) || 0
+      const totalComments = drawingsData?.reduce((sum, d) => sum + (d.comments_count || 0), 0) || 0
+
+      setSystemStats({
+        totalUsers,
+        activeUsers,
+        totalDrawings,
+        publicDrawings,
+        totalLikes,
+        totalComments,
+        reportedContent: 0, // Implementar quando houver sistema de reports
+        systemUptime: "99.9%", // Valor fixo por enquanto
+      })
+
+      setProcessProgress(50)
+
+      // Carregar usuários
+      const { data: fullUsersData, error: fullUsersError } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (fullUsersError) throw fullUsersError
+
+      const formattedUsers: User[] = fullUsersData?.map(user => ({
+        id: user.id,
+        name: user.name || 'Usuário',
+        email: user.email,
+        provider: user.provider || 'email',
+        joinDate: new Date(user.created_at),
+        lastActive: new Date(user.last_active_at || user.created_at),
+        drawingsCount: drawingsData?.filter(d => d.author_id === user.id).length || 0,
+        isActive: true,
+        isBanned: user.is_banned || false,
+      })) || []
+
+      setUsers(formattedUsers)
+      setProcessProgress(75)
+
+      // Carregar desenhos
+      const { data: fullDrawingsData, error: fullDrawingsError } = await supabase
+        .from('drawings')
+        .select(`
+          *,
+          users!inner(name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (fullDrawingsError) throw fullDrawingsError
+
+      const formattedDrawings: Drawing[] = fullDrawingsData?.map(drawing => ({
+        id: drawing.id,
+        title: drawing.title || 'Desenho sem título',
+        author: drawing.users?.name || 'Usuário desconhecido',
+        mode: drawing.mode || 'sketch-by-image',
+        createdAt: new Date(drawing.created_at),
+        isPublic: drawing.is_public || false,
+        likes: drawing.likes_count || 0,
+        comments: drawing.comments_count || 0,
+        isReported: false, // Implementar quando houver sistema de reports
+      })) || []
+
+      setDrawings(formattedDrawings)
+      setProcessProgress(90)
+
+      // Carregar imagens da galeria
+      await loadGalleryImages()
+
+      setProcessProgress(100)
+
+      console.log("Dados do sistema carregados com sucesso!")
+    } catch (error) {
+      console.error("Erro ao carregar dados do sistema:", error)
+    } finally {
+      setIsProcessing(false)
+      setProcessProgress(0)
+    }
+  }
+
+  const loadGalleryImages = async () => {
+    try {
+      // Obter token de sessão
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        console.error('Sem token de acesso')
+        return
+      }
+
+      const response = await fetch('/api/upload', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setGalleryImages(result.data)
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar imagens da galeria:', error)
+    }
+  }
+
+  const handleImageUpload = async () => {
+    if (!uploadFile || !selectedCategory) {
+      alert('Por favor, selecione um arquivo e uma categoria')
+      return
+    }
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    try {
+      // Obter token de sessão
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('Erro: sem token de acesso')
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+      formData.append('category', selectedCategory)
+      formData.append('description', imageDescription)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: formData
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Recarregar imagens da galeria
+          await loadGalleryImages()
+          
+          // Limpar formulário
+          setUploadFile(null)
+          setSelectedCategory('')
+          setImageDescription('')
+          
+          // Reset file input
+          const fileInput = document.querySelector('input["file"]') as HTMLInputElement
+          if (fileInput) fileInput.value = ''
+          
+          alert('Imagem enviada com sucesso!')
+        } else {
+          alert('Erro no upload: ' + result.error)
+        }
+      } else {
+        const error = await response.json()
+        alert('Erro no upload: ' + error.error)
+      }
+    } catch (error) {
+      console.error('Erro no upload:', error)
+      alert('Erro no upload da imagem')
+    } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  const handleBatchUpload = async () => {
+    if (!batchFiles || batchFiles.length === 0) {
+      alert('Por favor, selecione pelo menos uma imagem')
+      return
+    }
+
+    if (batchFiles.length > 50) {
+      alert('Máximo de 50 imagens por lote')
+      return
+    }
+
+    if (!selectedCategory) {
+      alert('Por favor, selecione uma categoria')
+      return
+    }
+
+    setIsBatchUploading(true)
+    setBatchProgress(0)
+    setBatchResults([])
+
+    try {
+      // Obter token de sessão
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        alert('Erro: sem token de acesso')
+        return
+      }
+
+      const formData = new FormData()
+      
+      // Adicionar todos os arquivos
+      Array.from(batchFiles).forEach((file, index) => {
+        formData.append(`files`, file)
+      })
+      
+      formData.append('category', selectedCategory)
+      formData.append('description', imageDescription || 'Upload em lote pelo admin')
+
+      const response = await fetch('/api/upload/batch', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: formData
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setBatchResults(result.data.results)
+          
+          // Recarregar imagens da galeria
+          await loadGalleryImages()
+          
+          // Limpar formulário
+          setBatchFiles(null)
+          setSelectedCategory('')
+          setImageDescription('')
+          
+          // Reset file input
+          const fileInput = document.querySelector('input["file"][multiple]') as HTMLInputElement
+          if (fileInput) fileInput.value = ''
+          
+          alert(`Upload em lote concluído! ${result.data.successCount} de ${result.data.totalFiles} imagens enviadas com sucesso.`)
+          
+          if (result.data.errors && result.data.errors.length > 0) {
+            console.error('Erros no upload em lote:', result.data.errors)
+          }
+        } else {
+          alert('Erro no upload em lote: ' + result.error)
+        }
+      } else {
+        const error = await response.json()
+        alert('Erro no upload em lote: ' + error.error)
+      }
+    } catch (error) {
+      console.error('Erro no upload em lote:', error)
+      alert('Erro no upload em lote das imagens')
+    } finally {
+      setIsBatchUploading(false)
+      setBatchProgress(0)
+    }
+  }
 
   const imageFilters = [
     { value: "all", label: "Todas as Categorias" },
@@ -231,7 +449,7 @@ export function EnhancedAdminDashboard() {
   }
 
   const filteredImages = galleryImages.filter((image) => {
-    const matchesFilter = imageFilter === "all" || imageFilter === "" || image.category === imageFilter
+    const matchesFilter = selectedImageFilter === "all" || selectedImageFilter === "" || image.category === selectedImageFilter
     const matchesSearch =
       searchTerm === "" ||
       image.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -332,7 +550,7 @@ export function EnhancedAdminDashboard() {
 
                 <div className="space-y-2">
                   <Label htmlFor="image-filter">Filtro de Imagem</Label>
-                  <Select>
+                  <Select value={selectedFilter} onValueChange={setSelectedFilter}>
                     <SelectTrigger>
                       <SelectValue placeholder="Aplicar filtro automático" />
                     </SelectTrigger>
@@ -351,16 +569,190 @@ export function EnhancedAdminDashboard() {
                   <Label htmlFor="image-upload">Arquivo de Imagem</Label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                     <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <p className="text-muted-foreground">Clique para fazer upload ou arraste a imagem aqui</p>
-                    <Input type="file" accept="image/*" className="mt-4" />
+                    <p className="text-muted-foreground">
+                      {uploadFile ? uploadFile.name : 'Clique para fazer upload ou arraste a imagem aqui'}
+                    </p>
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      className="mt-4" 
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      disabled={isUploading}
+                    />
                   </div>
                 </div>
 
-                <Button className="w-full">Fazer Upload</Button>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição da Imagem</Label>
+                  <Textarea
+                    value={imageDescription}
+                    onChange={(e) => setImageDescription(e.target.value)}
+                    placeholder="Digite uma descrição para a imagem..."
+                    rows={3}
+                    disabled={isUploading}
+                  />
+                </div>
+
+                <Button 
+                  className="w-full" 
+                  onClick={handleImageUpload}
+                  disabled={isUploading || !uploadFile || !selectedCategory}
+                >
+                  {isUploading ? 'Enviando...' : 'Fazer Upload'}
+                </Button>
               </CardContent>
             </Card>
 
-            {/* Gerenciar Descrições */}
+            {/* Upload de Imagem Individual */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  Upload de Imagem Individual
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="category">Categoria</Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isUploading}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sketch-by-image">Esboço por Imagem</SelectItem>
+                      <SelectItem value="blind-study">Estudo Cego</SelectItem>
+                      <SelectItem value="sketch-by-description">Esboço por Descrição</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="file">Arquivo</Label>
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      className="mt-4" 
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      disabled={isUploading}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição da Imagem</Label>
+                  <Textarea
+                    value={imageDescription}
+                    onChange={(e) => setImageDescription(e.target.value)}
+                    placeholder="Digite uma descrição para a imagem..."
+                    rows={3}
+                    disabled={isUploading}
+                  />
+                </div>
+
+                <Button 
+                  className="w-full" 
+                  onClick={handleImageUpload}
+                  disabled={isUploading || !uploadFile || !selectedCategory}
+                >
+                  {isUploading ? 'Enviando...' : 'Fazer Upload'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Upload em Lote */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  Upload em Lote (Máximo 50 imagens)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="batch-category">Categoria</Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isBatchUploading}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sketch-by-image">Esboço por Imagem</SelectItem>
+                      <SelectItem value="blind-study">Estudo Cego</SelectItem>
+                      <SelectItem value="sketch-by-description">Esboço por Descrição</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="batch-files">Arquivos (Máximo 50)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      multiple
+                      className="mt-4" 
+                      onChange={(e) => setBatchFiles(Array.from(e.target.files || []))}
+                      disabled={isBatchUploading}
+                    />
+                  </div>
+                  {batchFiles && batchFiles.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {batchFiles.length} arquivo(s) selecionado(s)
+                      {batchFiles.length > 50 && (
+                        <span className="text-red-500 ml-2">
+                          (Máximo 50 arquivos permitidos)
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="batch-description">Descrição Geral</Label>
+                  <Textarea
+                    value={imageDescription}
+                    onChange={(e) => setImageDescription(e.target.value)}
+                    placeholder="Digite uma descrição geral para o lote de imagens..."
+                    rows={3}
+                    disabled={isBatchUploading}
+                  />
+                </div>
+
+                {isBatchUploading && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">Enviando lote de imagens...</span>
+                    </div>
+                    <Progress value={batchProgress} className="w-full" />
+                  </div>
+                )}
+
+                <Button 
+                  className="w-full" 
+                  onClick={handleBatchUpload}
+                  disabled={isBatchUploading || !batchFiles || batchFiles.length === 0 || batchFiles.length > 50 || !selectedCategory}
+                >
+                  {isBatchUploading ? 'Enviando Lote...' : `Fazer Upload em Lote (${batchFiles?.length || 0} arquivos)`}
+                </Button>
+
+                {/* Resultados do Upload em Lote */}
+                {batchResults && batchResults.length > 0 && (
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                    <h4 className="font-medium text-green-800 mb-2">Resultados do Upload em Lote:</h4>
+                    <div className="space-y-1 text-sm">
+                      {batchResults.map((result, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span>{result.fileName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -423,7 +815,7 @@ export function EnhancedAdminDashboard() {
                     />
                   </div>
                 </div>
-                <Select value={imageFilter} onValueChange={setImageFilter}>
+                <Select value={selectedImageFilter} onValueChange={setSelectedImageFilter}>
                   <SelectTrigger className="w-48">
                     <Filter className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="Filtrar por categoria" />
@@ -440,41 +832,93 @@ export function EnhancedAdminDashboard() {
 
               {/* Lista de Imagens */}
               <div className="space-y-2">
-                {filteredImages.map((image) => (
-                  <div key={image.id} className="flex items-center justify-between p-3 border rounded">
-                    <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
-                        <ImageIcon className="h-6 w-6 text-gray-400" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{image.filename}</h4>
-                        <p className="text-sm text-muted-foreground">{image.description}</p>
-                        <div className="flex gap-2 mt-1">
-                          <Badge variant="outline">{image.category}</Badge>
-                          <Badge variant={image.isActive ? "default" : "secondary"}>
-                            {image.isActive ? "Ativo" : "Inativo"}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">{image.size}</span>
+                {filteredImages.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <ImageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Nenhuma imagem encontrada</p>
+                  </div>
+                ) : (
+                  filteredImages.map((image) => (
+                    <div key={image.id} className="flex items-center justify-between p-3 border rounded">
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center overflow-hidden">
+                          {image.thumbnailUrl ? (
+                            <img 
+                              src={image.thumbnailUrl} 
+                              alt={image.filename}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="h-6 w-6 text-gray-400" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-medium">{image.filename}</h4>
+                          <p className="text-sm text-muted-foreground">{image.description}</p>
+                          <div className="flex gap-2 mt-1">
+                            <Badge variant="outline">{image.category}</Badge>
+                            <Badge variant={image.isActive ? "default" : "secondary"}>
+                              {image.isActive ? "Ativo" : "Inativo"}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{image.size}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {image.uploadDate ? new Date(image.uploadDate).toLocaleDateString('pt-BR') : 'N/A'}
+                            </span>
+                          </div>
                         </div>
                       </div>
+                      <div className="flex gap-1">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedImage(image)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl">
+                            <DialogHeader>
+                              <DialogTitle>{selectedImage?.filename}</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              {selectedImage?.imageUrl && (
+                                <div className="flex justify-center">
+                                  <img 
+                                    src={selectedImage.imageUrl} 
+                                    alt={selectedImage.filename}
+                                    className="max-w-full max-h-96 object-contain"
+                                  />
+                                </div>
+                              )}
+                              <div>
+                                <h4 className="font-medium mb-2">Descrição:</h4>
+                                <p className="text-sm text-muted-foreground">{selectedImage?.description || 'Sem descrição'}</p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <strong>Categoria:</strong> {selectedImage?.category}
+                                </div>
+                                <div>
+                                  <strong>Tamanho:</strong> {selectedImage?.size}
+                                </div>
+                                <div>
+                                  <strong>Data de Upload:</strong> {selectedImage?.uploadDate ? new Date(selectedImage.uploadDate).toLocaleDateString('pt-BR') : 'N/A'}
+                                </div>
+                                <div>
+                                  <strong>Autor:</strong> {selectedImage?.authorName || 'Admin'}
+                                </div>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                        <Button variant="ghost" size="sm">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-red-600">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedImage(image)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      </Dialog>
-                      <Button variant="ghost" size="sm">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" className="text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -501,7 +945,7 @@ export function EnhancedAdminDashboard() {
                       </div>
                       <div className="flex gap-1">
                         <Badge variant={user.provider === "google" ? "default" : "secondary"}>
-                          {user.provider === "google" ? "Google" : "Discord"}
+                          {user.provider === "google" ? "Google" : "E-mail"}
                         </Badge>
                         <Badge variant={user.isActive ? "default" : "secondary"}>
                           {user.isActive ? "Ativo" : "Inativo"}

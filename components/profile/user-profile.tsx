@@ -408,7 +408,7 @@ export function UserProfile() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={userData.avatar_url || "/placeholder-user.jpg"} alt={userData.name} />
+                    <AvatarImage src={userData.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${userData.name}`} alt={userData.name} />
                     <AvatarFallback className="text-lg">
                       {userData.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                     </AvatarFallback>

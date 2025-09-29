@@ -21,10 +21,19 @@ export function LoginPage() {
     setError("")
     
     try {
-      await authService.loginWithEmail(email, password)
+      await authService.login(email, password)
       console.log("Login realizado com sucesso")
-      // Redirecionar para dashboard
-      window.location.href = "/dashboard"
+      
+      // Verificar se o usuário é admin
+      const isAdmin = await authService.isAdmin()
+      
+      if (isAdmin) {
+        // Redirecionar para dashboard de admin
+        window.location.href = "/admin"
+      } else {
+        // Redirecionar para dashboard normal
+        window.location.href = "/dashboard"
+      }
     } catch (error: any) {
       console.error("Erro no login:", error)
       const errorMessage = error?.message || "Email ou senha incorretos"
@@ -107,11 +116,19 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Link direto para admin */}
-          <div className="pt-4 border-t text-center">
-            <a href="/admin" className="text-xs text-muted-foreground hover:text-blue-600 transition-colors">
-              Acesso Administrativo
-            </a>
+          {/* Links de navegação */}
+          <div className="pt-4 border-t space-y-2 text-center">
+            <div>
+              <span className="text-sm text-muted-foreground">Não tem uma conta? </span>
+              <a href="/register" className="text-sm text-blue-600 hover:text-blue-800 transition-colors">
+                Criar conta
+              </a>
+            </div>
+            <div>
+              <a href="/admin" className="text-xs text-muted-foreground hover:text-blue-600 transition-colors">
+                Acesso Administrativo
+              </a>
+            </div>
           </div>
         </CardContent>
       </Card>

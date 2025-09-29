@@ -25,7 +25,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const currentUser = authService.getCurrentUser()
     setUser(currentUser)
-    setIsAdmin(authService.isAdmin())
+    
+    // Verificar status de admin de forma assíncrona
+    const checkAdminStatus = async () => {
+      const adminStatus = await authService.isAdmin()
+      setIsAdmin(adminStatus)
+    }
+    
+    if (currentUser) {
+      checkAdminStatus()
+    }
   }, [])
 
   const handleLogout = async () => {
@@ -68,7 +77,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-x-4 lg:gap-x-6 ml-auto">
               {user && (
                 <div className="flex items-center gap-2">
-                  <img src={user.avatar || "/placeholder.svg"} alt={user.name} className="h-8 w-8 rounded-full" />
+                  <img src={user.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`} alt={user.name} className="h-8 w-8 rounded-full" />
                   <span className="text-sm font-medium">{user.name}</span>
                 </div>
               )}
@@ -129,11 +138,11 @@ function SidebarContent({
             {user && (
               <div className="mb-4 p-2 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <img src={user.avatar || "/placeholder.svg"} alt={user.name} className="h-8 w-8 rounded-full" />
+                  <img src={user.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`} alt={user.name} className="h-8 w-8 rounded-full" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {user.provider === "google" ? "Google" : "Discord"}
+                      {user.provider === "google" ? "Google" : "E-mail"}
                     </p>
                   </div>
                 </div>

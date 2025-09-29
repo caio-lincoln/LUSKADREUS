@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Eye, EyeOff, CheckCircle, ArrowRight, Clock, Pause } from "lucide-react"
 import { CanvasBoardToggle } from "@/components/canvas/canvas-board-toggle"
 import { Progress } from "@/components/ui/progress"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 export function BlindStudyMode() {
   const [phase, setPhase] = useState<"viewing" | "drawing" | "comparing">("viewing")

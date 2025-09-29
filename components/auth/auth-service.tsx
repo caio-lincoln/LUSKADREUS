@@ -14,147 +14,186 @@ export interface AuthUser {
 class AuthService {
   private currentUser: AuthUser | null = null
 
-  // Login com email e senha
-  async loginWithEmail(email: string, password: string): Promise<AuthUser> {
-    // Primeiro tentar com credenciais de teste (para desenvolvimento)
+  // Login com Supabase Auth
+  async login(email: string, password: string): Promise<AuthUser> {
     try {
-      return await this.loginWithTestCredentials(email, password)
-    } catch (testError) {
-      // Se não for credencial de teste, tentar com Supabase
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-        if (error) {
-          console.error('Erro de autenticação Supabase:', error)
-          throw new Error("Credenciais inválidas")
-        }
-
-        if (data.user) {
-          // Buscar dados do usuário na tabela public.users
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', data.user.id)
-            .single()
-
-          if (userError || !userData) {
-            console.error('Erro ao buscar dados do usuário:', userError)
-            throw new Error("Erro ao carregar dados do usuário")
-          }
-
-          const user: AuthUser = {
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            avatar: userData.avatar_url || "/placeholder-user.jpg",
-            provider: "email",
-          }
-
-          this.currentUser = user
-          localStorage.setItem("auth_user", JSON.stringify(user))
-          localStorage.setItem("is_admin", userData.is_admin?.toString() || "false")
-          
-          return user
-        }
-      } catch (supabaseError) {
-        console.error('Erro na autenticação Supabase:', supabaseError)
-        throw new Error("Credenciais inválidas")
+      if (error) {
+        throw new Error(error.message)
       }
-    }
 
-    throw new Error("Credenciais inválidas")
+      if (!data.user) {
+        throw new Error("Falha na autenticação")
+      }
+
+      const user: AuthUser = {
+        id: data.user.id,
+        name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário',
+        email: data.user.email!,
+        avatar: data.user.user_metadata?.avatar_url || null,
+        provider: data.user.app_metadata?.provider || "email",
+      }
+
+      this.currentUser = user
+      return user
+    } catch (error) {
+      console.error("Erro no login:", error)
+      throw error
+    }
   }
 
-  // Método de fallback para credenciais de teste
-  private async loginWithTestCredentials(email: string, password: string): Promise<AuthUser> {
-    // Credenciais de teste
-    const validCredentials = [
-      { email: "admin@luskadreus.com", password: "admin123", name: "Administrador", isAdmin: true, id: "550e8400-e29b-41d4-a716-446655440000" },
-      { email: "user@luskadreus.com", password: "user123", name: "Usuário Teste", isAdmin: false, id: "550e8400-e29b-41d4-a716-446655440001" },
-      { email: "joao@email.com", password: "123456", name: "João Silva", isAdmin: false, id: "550e8400-e29b-41d4-a716-446655440002" },
-      { email: "caiolncoln@teste.com", password: "teste12345", name: "Caio Lincoln", isAdmin: false, id: "76ff64c1-11c7-4773-806b-c49cabe86be9" },
-    ]
+  // Registro de novo usuário
+  async register(email: string, password: string, name: string): Promise<AuthUser> {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+          }
+        }
+      })
 
-    const credential = validCredentials.find(
-      cred => cred.email === email && cred.password === password
-    )
+      if (error) {
+        throw new Error(error.message)
+      }
 
-    if (!credential) {
-      throw new Error("Credenciais inválidas")
+      if (!data.user) {
+        throw new Error("Falha no registro")
+      }
+
+      const user: AuthUser = {
+        id: data.user.id,
+        name: name,
+        email: data.user.email!,
+        avatar: data.user.user_metadata?.avatar_url || null,
+        provider: "email",
+      }
+
+      this.currentUser = user
+      return user
+    } catch (error) {
+      console.error("Erro no registro:", error)
+      throw error
     }
+  }
 
-    const user: AuthUser = {
-      id: credential.id,
-      name: credential.name,
-      email: credential.email,
-      avatar: "/placeholder-user.jpg",
-      provider: "email",
+  // Login com Google
+  async loginWithGoogle(): Promise<AuthUser> {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`
+        }
+      })
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      // O usuário será redirecionado para o Google e depois de volta
+      // O estado será gerenciado pelo onAuthStateChange
+      throw new Error("Redirecionando para Google...")
+    } catch (error) {
+      console.error("Erro no login com Google:", error)
+      throw error
     }
-
-    this.currentUser = user
-    localStorage.setItem("auth_user", JSON.stringify(user))
-    localStorage.setItem("is_admin", credential.isAdmin.toString())
-    
-    return user
   }
 
   // Logout
   async logout(): Promise<void> {
-    this.currentUser = null
-    localStorage.removeItem("auth_user")
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error("Erro no logout:", error)
+      }
+    } catch (error) {
+      console.error("Erro no logout:", error)
+    } finally {
+      this.currentUser = null
+    }
   }
 
   // Verificar se está autenticado
   isAuthenticated(): boolean {
-    if (typeof window === "undefined") {
-      return false
-    }
-    
-    try {
-      const stored = localStorage.getItem("auth_user")
-      return !!stored
-    } catch {
-      return false
-    }
+    return this.currentUser !== null
   }
 
   // Obter usuário atual
   getCurrentUser(): AuthUser | null {
-    if (this.currentUser) {
-      return this.currentUser
-    }
-
-    if (typeof window === "undefined") {
-      return null
-    }
-
-    try {
-      const stored = localStorage.getItem("auth_user")
-      if (stored) {
-        this.currentUser = JSON.parse(stored)
-        return this.currentUser
-      }
-    } catch {
-      return null
-    }
-    return null
+    return this.currentUser
   }
 
-  // Verificar se é admin
-  isAdmin(): boolean {
-    if (typeof window === "undefined") {
-      return false
-    }
-    
+  // Verificar se o usuário atual é admin
+  async isAdmin(): Promise<boolean> {
     try {
-      const isAdminStored = localStorage.getItem("is_admin")
-      return isAdminStored === "true"
-    } catch {
+      if (!this.currentUser) {
+        return false
+      }
+
+      // Buscar informações do usuário na tabela users para verificar is_admin
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', this.currentUser.id)
+        .single()
+
+      if (error) {
+        console.error("Erro ao verificar status de admin:", error)
+        return false
+      }
+
+      return data?.is_admin || false
+    } catch (error) {
+      console.error("Erro ao verificar status de admin:", error)
       return false
     }
+  }
+
+  // Inicializar estado de autenticação
+  async initializeAuth(): Promise<void> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.user) {
+        const user: AuthUser = {
+          id: session.user.id,
+          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
+          email: session.user.email!,
+          avatar: session.user.user_metadata?.avatar_url || null,
+          provider: session.user.app_metadata?.provider || "email",
+        }
+        this.currentUser = user
+      }
+    } catch (error) {
+      console.error("Erro ao inicializar autenticação:", error)
+    }
+  }
+
+  // Listener para mudanças de estado de autenticação
+  onAuthStateChange(callback: (user: AuthUser | null) => void) {
+    return supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const user: AuthUser = {
+          id: session.user.id,
+          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário',
+          email: session.user.email!,
+          avatar: session.user.user_metadata?.avatar_url || null,
+          provider: session.user.app_metadata?.provider || "email",
+        }
+        this.currentUser = user
+        callback(user)
+      } else {
+        this.currentUser = null
+        callback(null)
+      }
+    })
   }
 }
 
