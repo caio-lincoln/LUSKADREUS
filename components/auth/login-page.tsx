@@ -25,9 +25,10 @@ export function LoginPage() {
       console.log("Login realizado com sucesso")
       // Redirecionar para dashboard
       window.location.href = "/dashboard"
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro no login:", error)
-      setError("Email ou senha incorretos")
+      const errorMessage = error?.message || "Email ou senha incorretos"
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }

@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Menu, Home, Palette, LogOut, User, Shield } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -41,6 +41,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64">
+          <SheetHeader>
+            <SheetTitle>Menu de navegação</SheetTitle>
+          </SheetHeader>
           <SidebarContent navigation={adminNavigation} pathname={pathname} onLogout={handleLogout} user={user} />
         </SheetContent>
       </Sheet>

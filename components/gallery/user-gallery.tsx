@@ -46,16 +46,13 @@ export function UserGallery() {
   useEffect(() => {
     const user = authService.getCurrentUser()
     setCurrentUser(user)
-    if (user) {
-      loadDrawings()
-    }
   }, [])
 
   useEffect(() => {
     if (currentUser) {
       loadDrawings()
     }
-  }, [searchTerm, filterMode, sortBy])
+  }, [currentUser, searchTerm, filterMode, sortBy])
 
   const loadDrawings = async () => {
     if (!currentUser) return
@@ -76,6 +73,8 @@ export function UserGallery() {
         description: "Não foi possível carregar seus desenhos.",
         variant: "destructive"
       })
+      // Em caso de erro, definir array vazio para evitar loading infinito
+      setDrawings([])
     } finally {
       setLoading(false)
     }

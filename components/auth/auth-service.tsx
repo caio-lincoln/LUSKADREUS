@@ -16,53 +16,56 @@ class AuthService {
 
   // Login com email e senha
   async loginWithEmail(email: string, password: string): Promise<AuthUser> {
+    // Primeiro tentar com credenciais de teste (para desenvolvimento)
     try {
-      // Tentar autenticação com Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
+      return await this.loginWithTestCredentials(email, password)
+    } catch (testError) {
+      // Se não for credencial de teste, tentar com Supabase
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        })
 
-      if (error) {
-        console.error('Erro de autenticação Supabase:', error)
-        // Fallback para credenciais de teste se Supabase falhar
-        return this.loginWithTestCredentials(email, password)
-      }
-
-      if (data.user) {
-        // Buscar dados do usuário na tabela public.users
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single()
-
-        if (userError || !userData) {
-          console.error('Erro ao buscar dados do usuário:', userError)
-          // Fallback para credenciais de teste
-          return this.loginWithTestCredentials(email, password)
+        if (error) {
+          console.error('Erro de autenticação Supabase:', error)
+          throw new Error("Credenciais inválidas")
         }
 
-        const user: AuthUser = {
-          id: userData.id,
-          name: userData.name,
-          email: userData.email,
-          avatar: userData.avatar_url || "/placeholder-user.jpg",
-          provider: "email",
-        }
+        if (data.user) {
+          // Buscar dados do usuário na tabela public.users
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', data.user.id)
+            .single()
 
-        this.currentUser = user
-        localStorage.setItem("auth_user", JSON.stringify(user))
-        localStorage.setItem("is_admin", userData.is_admin?.toString() || "false")
-        
-        return user
+          if (userError || !userData) {
+            console.error('Erro ao buscar dados do usuário:', userError)
+            throw new Error("Erro ao carregar dados do usuário")
+          }
+
+          const user: AuthUser = {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            avatar: userData.avatar_url || "/placeholder-user.jpg",
+            provider: "email",
+          }
+
+          this.currentUser = user
+          localStorage.setItem("auth_user", JSON.stringify(user))
+          localStorage.setItem("is_admin", userData.is_admin?.toString() || "false")
+          
+          return user
+        }
+      } catch (supabaseError) {
+        console.error('Erro na autenticação Supabase:', supabaseError)
+        throw new Error("Credenciais inválidas")
       }
-    } catch (error) {
-      console.error('Erro na autenticação:', error)
     }
 
-    // Fallback para credenciais de teste
-    return this.loginWithTestCredentials(email, password)
+    throw new Error("Credenciais inválidas")
   }
 
   // Método de fallback para credenciais de teste
