@@ -53,15 +53,11 @@ export async function POST(request: NextRequest) {
     const userId = user.id
     const timestamp = Date.now()
     
-    // Determinar bucket baseado na categoria
-    let bucketName = 'images' // fallback para bucket padrão
-    if (['sketch-by-image', 'blind-study', 'sketch-by-description'].includes(category)) {
-      bucketName = category
-    }
-    
-    // Para uploads de admin, usar estrutura de pasta com userId como primeira pasta
-    // Isso é necessário para as políticas RLS que verificam storage.foldername(name)[1]
-    const fileName = `${userId}/admin-uploads/${timestamp}.${fileExtension}`
+    // Para uploads de admin, sempre usar o bucket admin-uploads
+    // com estrutura de pasta userId/categoria/timestamp
+    const bucketName = 'admin-uploads'
+    const categoryFolder = category || 'general'
+    const fileName = `${userId}/${categoryFolder}/${timestamp}.${fileExtension}`
     const filePath = fileName
 
     // Upload para o Supabase Storage no bucket específico

@@ -34,9 +34,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Descrição, categoria e título são obrigatórios' }, { status: 400 })
     }
 
-    // Para uploads de admin, usar o ID do usuário admin logado
+    // Para uploads de admin, usar estrutura de pasta com userId e categoria
     const userId = session.user.id
-    const fileName = `${userId}/${Date.now()}.txt`
+    const categoryFolder = category || 'general'
+    const fileName = `${userId}/${categoryFolder}/${Date.now()}.txt`
 
     // Upload da descrição para o bucket 'descriptions'
     const { data: uploadData, error: uploadError } = await supabase.storage
