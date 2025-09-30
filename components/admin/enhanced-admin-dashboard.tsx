@@ -73,6 +73,10 @@ interface GalleryImage {
   size: string
   dimensions: string
   isActive: boolean
+  imageUrl?: string
+  thumbnailUrl?: string
+  authorName?: string
+  position?: number
 }
 
 interface SystemStats {
@@ -127,6 +131,8 @@ export default function EnhancedAdminDashboard() {
   // Carregar dados reais do Supabase
   useEffect(() => {
     loadSystemData()
+    // Também carregar imagens da galeria diretamente
+    loadGalleryImages()
   }, [])
 
   const loadSystemData = async () => {
@@ -240,31 +246,76 @@ export default function EnhancedAdminDashboard() {
 
   const loadGalleryImages = async () => {
     try {
+      console.log('🔍 [FRONTEND] Iniciando carregamento de imagens da galeria')
+      
       // Obter token de sessão
       const { data: { session } } = await supabase.auth.getSession()
+      console.log('🔍 [FRONTEND] Sessão obtida:', {
+        hasSession: !!session,
+        hasAccessToken: !!session?.access_token,
+        userId: session?.user?.id
+      })
+      
       if (!session?.access_token) {
-        console.error('Sem token de acesso')
+        console.error('❌ [FRONTEND] Sem token de acesso')
         return
       }
 
+      console.log('🔍 [FRONTEND] Fazendo requisição GET para /api/upload')
       const response = await fetch('/api/upload', {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
       })
+      
+      console.log('🔍 [FRONTEND] Resposta recebida:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      })
+      
       if (response.ok) {
         const result = await response.json()
+        console.log('🔍 [FRONTEND] Resultado da API:', result)
+        
         if (result.success) {
+          console.log('✅ [FRONTEND] Imagens carregadas com sucesso:', {
+            count: result.data?.length || 0,
+            images: result.data
+          })
           setGalleryImages(result.data)
+        } else {
+          console.error('❌ [FRONTEND] API retornou erro:', result.error)
         }
+      } else {
+        const errorText = await response.text()
+        console.error('❌ [FRONTEND] Erro na requisição:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        })
       }
     } catch (error) {
-      console.error('Erro ao carregar imagens da galeria:', error)
+      console.error('❌ [FRONTEND] Erro ao carregar imagens da galeria:', error)
     }
   }
 
   const handleImageUpload = async () => {
+    console.log('🚀 [FRONTEND] Iniciando processo de upload')
+    console.log('🚀 [FRONTEND] Estado inicial:', {
+      hasFile: !!uploadFile,
+      fileName: uploadFile?.name,
+      fileSize: uploadFile?.size,
+      fileType: uploadFile?.type,
+      selectedCategory,
+      descriptionLength: imageDescription?.length || 0
+    })
+
     if (!uploadFile || !selectedCategory) {
+      console.error('❌ [FRONTEND] Validação inicial falhou:', {
+        hasFile: !!uploadFile,
+        hasCategory: !!selectedCategory
+      })
       alert('Por favor, selecione um arquivo e uma categoria')
       return
     }
@@ -273,18 +324,41 @@ export default function EnhancedAdminDashboard() {
     setUploadProgress(0)
 
     try {
+      console.log('📋 [FRONTEND] Obtendo sessão do Supabase')
       // Obter token de sessão
       const { data: { session } } = await supabase.auth.getSession()
+      console.log('📋 [FRONTEND] Sessão obtida:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        hasAccessToken: !!session?.access_token,
+        userId: session?.user?.id
+      })
+
       if (!session?.access_token) {
+        console.error('❌ [FRONTEND] Erro: sem token de acesso')
         alert('Erro: sem token de acesso')
         return
       }
 
+      console.log('📋 [FRONTEND] Preparando FormData')
       const formData = new FormData()
       formData.append('file', uploadFile)
       formData.append('category', selectedCategory)
       formData.append('description', imageDescription)
 
+      console.log('📋 [FRONTEND] FormData preparado:', {
+        fileAppended: formData.has('file'),
+        categoryAppended: formData.has('category'),
+        descriptionAppended: formData.has('description'),
+        formDataEntries: Array.from(formData.entries()).map(([key, value]) => ({
+          key,
+          valueType: typeof value,
+          isFile: value instanceof File,
+          fileName: value instanceof File ? value.name : undefined
+        }))
+      })
+
+      console.log('📋 [FRONTEND] Fazendo requisição para /api/upload')
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: {
@@ -293,9 +367,20 @@ export default function EnhancedAdminDashboard() {
         body: formData
       })
 
+      console.log('📋 [FRONTEND] Resposta recebida:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      })
+
       if (response.ok) {
+        console.log('✅ [FRONTEND] Resposta OK, processando JSON')
         const result = await response.json()
+        console.log('✅ [FRONTEND] Resultado do upload:', result)
+
         if (result.success) {
+          console.log('✅ [FRONTEND] Upload bem-sucedido, recarregando galeria')
           // Recarregar imagens da galeria
           await loadGalleryImages()
           
@@ -305,38 +390,55 @@ export default function EnhancedAdminDashboard() {
           setImageDescription('')
           
           // Reset file input
-          const fileInput = document.querySelector('input["file"]') as HTMLInputElement
+          const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
           if (fileInput) fileInput.value = ''
           
+          console.log('✅ [FRONTEND] Formulário limpo')
           alert('Imagem enviada com sucesso!')
         } else {
+          console.error('❌ [FRONTEND] Upload falhou:', result.error)
           alert('Erro no upload: ' + result.error)
         }
       } else {
+        console.error('❌ [FRONTEND] Resposta não OK')
         const error = await response.json()
+        console.error('❌ [FRONTEND] Erro da API:', error)
         alert('Erro no upload: ' + error.error)
       }
     } catch (error) {
-      console.error('Erro no upload:', error)
+      console.error('❌ [FRONTEND] Erro no catch:', error)
+      console.error('❌ [FRONTEND] Stack trace:', error instanceof Error ? error.stack : 'N/A')
       alert('Erro no upload da imagem')
     } finally {
+      console.log('🏁 [FRONTEND] Finalizando upload')
       setIsUploading(false)
       setUploadProgress(0)
     }
   }
 
   const handleBatchUpload = async () => {
+    console.log('🚀 [FRONTEND] Iniciando upload em lote')
+    console.log('🚀 [FRONTEND] Estado inicial do lote:', {
+      hasFiles: !!batchFiles,
+      fileCount: batchFiles?.length || 0,
+      selectedCategory,
+      descriptionLength: imageDescription?.length || 0
+    })
+
     if (!batchFiles || batchFiles.length === 0) {
+      console.error('❌ [FRONTEND] Nenhum arquivo selecionado para lote')
       alert('Por favor, selecione pelo menos uma imagem')
       return
     }
 
     if (batchFiles.length > 50) {
+      console.error('❌ [FRONTEND] Muitos arquivos para lote:', batchFiles.length)
       alert('Máximo de 50 imagens por lote')
       return
     }
 
     if (!selectedCategory) {
+      console.error('❌ [FRONTEND] Categoria não selecionada para lote')
       alert('Por favor, selecione uma categoria')
       return
     }
@@ -346,23 +448,37 @@ export default function EnhancedAdminDashboard() {
     setBatchResults([])
 
     try {
+      console.log('📋 [FRONTEND] Obtendo sessão para upload em lote')
       // Obter token de sessão
       const { data: { session } } = await supabase.auth.getSession()
+      console.log('📋 [FRONTEND] Sessão do lote obtida:', {
+        hasSession: !!session,
+        hasAccessToken: !!session?.access_token
+      })
+
       if (!session?.access_token) {
+        console.error('❌ [FRONTEND] Erro: sem token de acesso para lote')
         alert('Erro: sem token de acesso')
         return
       }
 
+      console.log('📋 [FRONTEND] Preparando FormData para lote')
       const formData = new FormData()
       
       // Adicionar todos os arquivos
       Array.from(batchFiles).forEach((file, index) => {
+        console.log(`📋 [FRONTEND] Adicionando arquivo ${index + 1}:`, {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        })
         formData.append(`files`, file)
       })
       
       formData.append('category', selectedCategory)
       formData.append('description', imageDescription || 'Upload em lote pelo admin')
 
+      console.log('📋 [FRONTEND] Fazendo requisição para /api/upload/batch')
       const response = await fetch('/api/upload/batch', {
         method: 'POST',
         headers: {
@@ -371,8 +487,16 @@ export default function EnhancedAdminDashboard() {
         body: formData
       })
 
+      console.log('📋 [FRONTEND] Resposta do lote recebida:', {
+        status: response.status,
+        ok: response.ok
+      })
+
       if (response.ok) {
+        console.log('✅ [FRONTEND] Resposta do lote OK')
         const result = await response.json()
+        console.log('✅ [FRONTEND] Resultado do lote:', result)
+
         if (result.success) {
           setBatchResults(result.data.results)
           
@@ -385,25 +509,34 @@ export default function EnhancedAdminDashboard() {
           setImageDescription('')
           
           // Reset file input
-          const fileInput = document.querySelector('input["file"][multiple]') as HTMLInputElement
+          const fileInput = document.querySelector('input[type="file"][multiple]') as HTMLInputElement
           if (fileInput) fileInput.value = ''
           
+          console.log('✅ [FRONTEND] Upload em lote concluído:', {
+            successCount: result.data.successCount,
+            totalFiles: result.data.totalFiles
+          })
           alert(`Upload em lote concluído! ${result.data.successCount} de ${result.data.totalFiles} imagens enviadas com sucesso.`)
           
           if (result.data.errors && result.data.errors.length > 0) {
-            console.error('Erros no upload em lote:', result.data.errors)
+            console.error('❌ [FRONTEND] Erros no upload em lote:', result.data.errors)
           }
         } else {
+          console.error('❌ [FRONTEND] Upload em lote falhou:', result.error)
           alert('Erro no upload em lote: ' + result.error)
         }
       } else {
+        console.error('❌ [FRONTEND] Resposta do lote não OK')
         const error = await response.json()
+        console.error('❌ [FRONTEND] Erro da API do lote:', error)
         alert('Erro no upload em lote: ' + error.error)
       }
     } catch (error) {
-      console.error('Erro no upload em lote:', error)
+      console.error('❌ [FRONTEND] Erro no catch do lote:', error)
+      console.error('❌ [FRONTEND] Stack trace do lote:', error instanceof Error ? error.stack : 'N/A')
       alert('Erro no upload em lote das imagens')
     } finally {
+      console.log('🏁 [FRONTEND] Finalizando upload em lote')
       setIsBatchUploading(false)
       setBatchProgress(0)
     }
@@ -448,6 +581,14 @@ export default function EnhancedAdminDashboard() {
     console.log(`🔄 Iniciando ${action}...`)
   }
 
+  // Debug: Log do estado das imagens
+  console.log('🖼️ Estado atual das imagens:', {
+    galleryImagesCount: galleryImages.length,
+    galleryImages: galleryImages,
+    selectedImageFilter,
+    searchTerm
+  })
+
   const filteredImages = galleryImages.filter((image) => {
     const matchesFilter = selectedImageFilter === "all" || selectedImageFilter === "" || image.category === selectedImageFilter
     const matchesSearch =
@@ -455,6 +596,11 @@ export default function EnhancedAdminDashboard() {
       image.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
       image.description.toLowerCase().includes(searchTerm.toLowerCase())
     return matchesFilter && matchesSearch
+  })
+
+  console.log('🔍 Imagens filtradas:', {
+    filteredImagesCount: filteredImages.length,
+    filteredImages: filteredImages
   })
 
   return (
